@@ -114,7 +114,19 @@
           if(!ft){overlay.setPosition(undefined);return;}
           const name = ft.get('nprov')||'';
           const ln = name.toLowerCase();
-          if(ln==='buenos aires'||ln.includes('provincia de buenos aires')||ln.includes('corrientes')) { overlay.setPosition(undefined); return; }
+          
+          // No mostrar popup para provincias en blanco (Buenos Aires y Corrientes)
+          if(ln==='buenos aires'||ln.includes('provincia de buenos aires')||ln.includes('corrientes')) { 
+            overlay.setPosition(undefined); 
+            return; 
+          }
+          
+          // Tampoco mostrar popup para provincias que no están en azul (las que no tienen datos)
+          // Solo mostrar popup para CABA y provincias con datos válidos
+          if(!isCABA(name) && (!ft.get('_coal1') || ft.get('_coal1') === 'null' || ft.get('_coal1') === null)) {
+            overlay.setPosition(undefined);
+            return;
+          }
           let c1,v1,c2,v2,c3,v3;
           console.log('Province name:', name);
           console.log('Is CABA check:', isCABA(name));
