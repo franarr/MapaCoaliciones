@@ -30,8 +30,7 @@
       .ol-popup:after { border-color:rgba(255,255,255,0); border-top-color:#fff; border-width:10px; left:48px; margin-left:-10px; }
       .ol-popup:before { border-color:rgba(0,0,0,0); border-top-color:rgba(0,0,0,0.1); border-width:11px; left:48px; margin-left:-11px; }
       .ol-popup-closer { position:absolute; top:8px; right:12px; width:20px; height:20px; color:#666; text-decoration:none;
-        display:flex; align-items:center; justify-content:center;
-      }
+        display:flex; align-items:center; justify-content:center; }
       .ol-popup-closer:after { content:"✕"; }
       .popup-header { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; padding:16px 20px; margin:0; }
       .popup-header h3 { margin:0; font-size:18px; font-weight:600; display:flex; align-items:center; gap:8px; }
@@ -81,13 +80,12 @@
         }
         return origStyle(feature, resolution);
       };
-    </script>
-    <script>
       window.onload = function() {
         const overlay = new ol.Overlay({ element: document.getElementById('popup'), autoPan:true, autoPanAnimation:{duration:250} });
         map.addOverlay(overlay);
         document.getElementById('popup-closer').onclick = () => { overlay.setPosition(undefined); return false; };
-        const highlightLayer = new ol.layer.Vector({ source:new ol.source.Vector(), map:map,
+        const highlightLayer = new ol.layer.Vector({
+          source:new ol.source.Vector(), map:map,
           style:new ol.style.Style({ stroke:new ol.style.Stroke({ color:'#667eea', width:3 }), fill:new ol.style.Fill({ color:'rgba(102,126,234,0.1)' }) })
         });
         let prev;
@@ -98,39 +96,89 @@
           const excl = nm==='buenos aires'||nm.includes('provincia de buenos aires')||nm.includes('corrientes');
           if(ft!==prev) { if(prev) highlightLayer.getSource().removeFeature(prev); if(ft&&!excl) highlightLayer.getSource().addFeature(ft); prev=excl?null:ft; }
         });
-
-        function isCABA(n){const l=n.toLowerCase();return l.includes('ciudad autónoma')||l.includes('caba')||l.includes('capital federal');}
-
+        // Funciones
+        function isCABA(n){
+          const l=n.toLowerCase();
+          return l.includes('ciudad autónoma')||l.includes('caba')||l.includes('capital federal')||
+                 l.includes('ciudad de buenos aires')||l.includes('buenos aires')||l.includes('c.a.b.a')||
+                 l.includes('cap fed')||l.includes('capital')||l.includes('autonoma');
+        }
         function getBallotType(n){
-          const l = n.toLowerCase();
-          if (isCABA(n)) return 'ELECTRÓNICA';
-          if (['san luis', 'jujuy', 'santa fe'].some(p => l.includes(p))) return 'ÚNICA';
-          if (['misiones', 'chaco', 'formosa'].some(p => l.includes(p))) return 'PARTIDARIA';
-          if (l.includes('salta')) return 'ELECTRÓNICA';
+          console.log('Checking ballot type for:', n);
+          const province = n.toLowerCase();
+          
+          // CABA - Electrónico (NO TOCAR según instrucciones)
+          if(isCABA(n)) {
+            return 'ELECTRÓNICO';
+          }
+          
+          // San Luis, Jujuy, Santa Fe - ÚNICA
+          if(province.includes('san luis') || province.includes('jujuy') || province.includes('santa fe')) {
+            return 'ÚNICA';
+          }
+          
+          // Misiones, Chaco, Formosa - PARTIDARIA
+          if(province.includes('misiones') || province.includes('chaco') || province.includes('formosa')) {
+            return 'PARTIDARIA';
+          }
+          
+          // Salta - Electrónica
+          if(province.includes('salta')) {
+            return 'ELECTRÓNICA';
+          }
+          
           return 'No especificado';
         }
-
         function getPrimaryStatus(){return{status:'NO',class:'primary-no'}}
         function getElectionSplit(){return{status:'SÍ',class:'primary-yes'}}
-
         map.on('singleclick', evt => {
           const ft = map.forEachFeatureAtPixel(evt.pixel,f=>f);
           if(!ft){overlay.setPosition(undefined);return;}
           const name = ft.get('nprov')||'';
           const ln = name.toLowerCase();
-          if(ln==='buenos aires'||ln.includes('provincia de buenos aires')||ln.includes('corrientes')) { overlay.setPosition(undefined); return; }
+          
+          // No mostrar popup para provincias en blanco (Buenos Aires y Corrientes)
+          if(ln==='buenos aires'||ln.includes('provincia de buenos aires')||ln.includes('corrientes')) { 
+            overlay.setPosition(undefined); 
+            return; 
+          }
+          
+          // Tampoco mostrar popup para provincias que no están en azul (las que no tienen datos)
+          // Solo mostrar popup para CABA y provincias con datos válidos
+          if(!isCABA(name) && (!ft.get('_coal1') || ft.get('_coal1') === 'null' || ft.get('_coal1') === null)) {
+            overlay.setPosition(undefined);
+            return;
+          }
           let c1,v1,c2,v2,c3,v3;
-          if(isCABA(name)) { c1='LLA: OFICIALISMO';v1='30';c2='AHORA BUENOS AIRES: PERONISMO LOCAL';v2='27';c3='BUENOS AIRES PRIMERO: CONFIANZA, PARTIDO FEDERAL';v3='8'; }
-          else { c1=ft.get('_coal1');v1=ft.get('_votos1');c2=ft.get('_coal2');v2=ft.get('_votos2');c3=ft.get('_coal3');v3=ft.get('_votos3'); }
-          const ballot=getBallotType(name), paso=getPrimaryStatus(), split=getElectionSplit();
-          document.getElementById('popup-content').innerHTML = `
-            <div class="popup-header"><h3>📍 ${name}</h3></div>
+          console.log('Province name:', name);
+          console.log('Is CABA check:', isCABA(name));
+          
+          // Datos hardcodeados para CABA - más condiciones para asegurar detección
+          if(isCABA(name) || name.toLowerCase().includes('ciudad') || name.toLowerCase().includes('autónoma') || 
+             name.toLowerCase().includes('federal') || name.toLowerCase().includes('capital')) {
+            console.log('Using CABA data');
+            c1 = 'LLA: OFICIALISMO'; v1 = '30';
+            c2 = 'AHORA BUENOS AIRES: PERONISMO LOCAL'; v2 = '27';
+            c3 = 'BUENOS AIRES PRIMERO: CONFIANZA, PARTIDO FEDERAL'; v3 = '8';
+          } else {
+            console.log('Using feature data');
+            c1 = ft.get('_coal1') || 'Sin datos'; v1 = ft.get('_votos1') || '0';
+            c2 = ft.get('_coal2') || 'Sin datos'; v2 = ft.get('_votos2') || '0';
+            c3 = ft.get('_coal3') || 'Sin datos'; v3 = ft.get('_votos3') || '0';
+          }
+          const ballot = getBallotType(name), paso = getPrimaryStatus(), split = getElectionSplit();
+          console.log('Ballot type result:', ballot);
+          
+          // Usar el tipo de boleta determinado por getBallotType
+          const finalBallotType = ballot;
+          document.getElementById('popup-content').innerHTML = 
+            `<div class="popup-header"><h3>📍 ${name}</h3></div>
             <div class="popup-content">
               <div class="result-item"><div class="result-left"><span class="result-medal">🥇</span><span class="result-label">Primera fuerza:</span></div><span class="result-party">${c1} (${v1}%)</span></div>
               <div class="result-item"><div class="result-left"><span class="result-medal">🥈</span><span class="result-label">Segunda fuerza:</span></div><span class="result-party">${c2} (${v2}%)</span></div>
               <div class="result-item"><div class="result-left"><span class="result-medal">🥉</span><span class="result-label">Tercera fuerza:</span></div><span class="result-party">${c3} (${v3}%)</span></div>
               <div class="info-section">
-                <div class="info-item"><span class="info-icon">🗳️</span><span><strong>Tipo de boleta:</strong> <span class="ballot-type">${ballot}</span></span></div>
+                <div class="info-item"><span class="info-icon">🗳️</span><span><strong>Tipo de boleta:</strong> <span class="ballot-type">${finalBallotType}</span></span></div>
                 <div class="info-item"><span class="info-icon">📊</span><span><strong>PASO:</strong> <span class="primary-status ${paso.class}">${paso.status}</span></span></div>
                 <div class="info-item"><span class="info-icon">🗓️</span><span><strong>Desdoblaron elección:</strong> <span class="primary-status ${split.class}">${split.status}</span></span></div>
               </div>
